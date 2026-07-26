@@ -1,7 +1,7 @@
 {
   "name": "marketing-agent-backend",
   "version": "1.0.0",
-  "description": "Backend API for the Aria marketing AI agent",
+  "description": "Backend API for the NBR Marketing Agent",
   "type": "commonjs",
   "main": "server.js",
   "scripts": {

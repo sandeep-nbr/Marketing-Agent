@@ -11,8 +11,9 @@ import {
 } from "../lib/speech.js";
 
 const TASK_TOOLS = new Set(["add_task", "complete_task", "delete_task"]);
+const AUTOMATION_TOOLS = new Set(["add_automation", "trigger_automation", "delete_automation"]);
 
-export default function ChatPanel({ onTaskMutation }) {
+export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
   const [messages, setMessages] = useState([]); // {role, content}
   const [input, setInput] = useState("");
   const [streamingText, setStreamingText] = useState("");
@@ -25,6 +26,7 @@ export default function ChatPanel({ onTaskMutation }) {
   const recognizerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -74,8 +76,21 @@ export default function ChatPanel({ onTaskMutation }) {
     setActiveTool(null);
 
     let accumulated = "";
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const finishWithPartial = () => {
+      if (accumulated) {
+        setMessages((prev) => [...prev, { role: "assistant", content: accumulated }]);
+      }
+      setStreamingText("");
+      setIsStreaming(false);
+      setActiveTool(null);
+      abortControllerRef.current = null;
+    };
 
     await streamChat(nextMessages, {
+      signal: controller.signal,
       onText: (delta) => {
         accumulated += delta;
         setStreamingText(accumulated);
@@ -84,16 +99,17 @@ export default function ChatPanel({ onTaskMutation }) {
       onToolEnd: (name) => {
         setActiveTool(null);
         if (TASK_TOOLS.has(name)) onTaskMutation?.();
+        if (AUTOMATION_TOOLS.has(name)) onAutomationMutation?.();
       },
       onDone: () => {
-        setMessages((prev) => [...prev, { role: "assistant", content: accumulated }]);
-        setStreamingText("");
-        setIsStreaming(false);
-        setActiveTool(null);
+        finishWithPartial();
         if (voiceReplyOn && accumulated) {
           setSpeaking(true);
           speak(accumulated, { onEnd: () => setSpeaking(false) });
         }
+      },
+      onStopped: () => {
+        finishWithPartial();
       },
       onError: (message) => {
         setMessages((prev) => [
@@ -103,8 +119,13 @@ export default function ChatPanel({ onTaskMutation }) {
         setStreamingText("");
         setIsStreaming(false);
         setActiveTool(null);
+        abortControllerRef.current = null;
       },
     });
+  }
+
+  function stopGenerating() {
+    abortControllerRef.current?.abort();
   }
 
   function handleKeyDown(e) {
@@ -129,10 +150,11 @@ export default function ChatPanel({ onTaskMutation }) {
         {messages.length === 0 && !isStreaming && (
           <div className="empty-state">
             <div className="brand-orb" />
-            <h2>I'm Aria — your marketing agent</h2>
+            <h2>I'm your NBR Marketing Agent</h2>
             <p>
-              Ask me to draft campaign copy, plan content, research competitors, or manage your
-              marketing to-dos. Type a command or tap the mic and just talk to me.
+              Ask me to draft campaign copy, generate visuals, plan content, research competitors,
+              trigger your automations, or manage your marketing to-dos. Type a command or tap the
+              mic and just talk to me.
             </p>
           </div>
         )}
@@ -176,7 +198,7 @@ export default function ChatPanel({ onTaskMutation }) {
             autoGrow();
           }}
           onKeyDown={handleKeyDown}
-          placeholder={listening ? "Listening…" : "Ask Aria to draft, plan, research, or track something…"}
+          placeholder={listening ? "Listening…" : "Ask your NBR Marketing Agent anything…"}
           rows={1}
         />
 
@@ -196,15 +218,21 @@ export default function ChatPanel({ onTaskMutation }) {
           {voiceReplyOn ? "🔊" : "🔇"}
         </button>
 
-        <button
-          type="button"
-          className="icon-btn send-btn"
-          onClick={() => send()}
-          disabled={!input.trim() || isStreaming}
-          title="Send"
-        >
-          ➤
-        </button>
+        {isStreaming ? (
+          <button type="button" className="icon-btn stop-btn" onClick={stopGenerating} title="Stop generating">
+            ■
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="icon-btn send-btn"
+            onClick={() => send()}
+            disabled={!input.trim()}
+            title="Send"
+          >
+            ➤
+          </button>
+        )}
       </div>
     </div>
   );

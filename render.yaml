@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: aria-marketing-agent
+    name: nbr-marketing-agent
     runtime: node
     plan: free
     buildCommand: cd frontend && npm install && npm run build && cd ../backend && npm install
@@ -8,7 +8,7 @@ services:
     envVars:
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: ARIA_MODEL
+      - key: NBR_MODEL
         value: claude-sonnet-5
       - key: NODE_VERSION
         value: 22.22.2

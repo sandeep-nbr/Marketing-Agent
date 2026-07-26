@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const { runAgentTurn } = require("./lib/anthropic");
 const tasks = require("./lib/tasks");
+const automations = require("./lib/automations");
 
 const app = express();
 const PORT = process.env.PORT || 8787;
@@ -13,7 +14,7 @@ app.use(express.json({ limit: "5mb" }));
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn(
-    "\n[Aria] WARNING: ANTHROPIC_API_KEY is not set. Copy backend/.env.example to backend/.env and add your key.\n"
+    "\n[NBR Marketing Agent] WARNING: ANTHROPIC_API_KEY is not set. Copy backend/.env.example to backend/.env and add your key.\n"
   );
 }
 
@@ -29,17 +30,28 @@ app.post("/api/chat", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.flushHeaders?.();
 
+  // Cancel the in-flight Anthropic request if the client disconnects (e.g.
+  // the user hits "Stop" and aborts the fetch on their end). Note: listen on
+  // `res`, not `req` — `req`'s 'close' fires as soon as the (tiny) request
+  // body is fully read, which happens almost instantly and has nothing to
+  // do with whether the client is still waiting on the response.
+  const controller = new AbortController();
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+
   const send = (event) => {
+    if (res.writableEnded) return;
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
   try {
-    await runAgentTurn(messages, send);
+    await runAgentTurn(messages, send, { signal: controller.signal });
   } catch (err) {
-    console.error("[Aria] chat error:", err);
+    console.error("[NBR Marketing Agent] chat error:", err);
     send({ type: "error", message: err.message || "Something went wrong." });
   } finally {
-    res.end();
+    if (!res.writableEnded) res.end();
   }
 });
 
@@ -66,6 +78,36 @@ app.delete("/api/tasks/:id", (req, res) => {
   res.status(204).end();
 });
 
+// --- Automation endpoints (Zapier / Make.com webhooks) ---
+app.get("/api/automations", (req, res) => {
+  res.json(automations.listAutomations());
+});
+
+app.post("/api/automations", (req, res) => {
+  const { name, webhookUrl, description } = req.body;
+  if (!name || !webhookUrl) return res.status(400).json({ error: "name and webhookUrl are required" });
+  try {
+    res.status(201).json(automations.addAutomation({ name, webhookUrl, description }));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/automations/:id/trigger", async (req, res) => {
+  try {
+    const result = await automations.triggerAutomation(req.params.id, req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete("/api/automations/:id", (req, res) => {
+  const ok = automations.deleteAutomation(req.params.id);
+  if (!ok) return res.status(404).json({ error: "automation not found" });
+  res.status(204).end();
+});
+
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, hasApiKey: !!process.env.ANTHROPIC_API_KEY });
 });
@@ -81,5 +123,5 @@ app.get("*", (req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[Aria] backend listening on http://localhost:${PORT}`);
+  console.log(`[NBR Marketing Agent] backend listening on http://localhost:${PORT}`);
 });

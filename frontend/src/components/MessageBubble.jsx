@@ -7,6 +7,11 @@ const TOOL_LABELS = {
   complete_task: "Updating task…",
   delete_task: "Removing task…",
   web_search: "Searching the web…",
+  generate_image: "Generating image…",
+  list_automations: "Checking your automations…",
+  add_automation: "Registering automation…",
+  trigger_automation: "Triggering automation…",
+  delete_automation: "Removing automation…",
 };
 
 export function ToolChip({ name }) {
@@ -22,7 +27,7 @@ export default function MessageBubble({ role, content, streaming }) {
   const isUser = role === "user";
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`}>
-      <div className={`avatar ${isUser ? "user" : "assistant"}`}>{isUser ? "You" : "A"}</div>
+      <div className={`avatar ${isUser ? "user" : "assistant"}`}>{isUser ? "You" : "N"}</div>
       <div className="bubble">
         {content ? (
           <ReactMarkdown>{content}</ReactMarkdown>
