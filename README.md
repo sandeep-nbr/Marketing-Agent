@@ -95,5 +95,22 @@ cd frontend && npm run build
 cd ../backend && npm start
 ```
 
+### Deploying to Render (live public URL)
+
+This repo includes a `render.yaml` blueprint for a one-command deploy on
+[Render](https://render.com):
+
+1. Push this repo to GitHub (already done if you're reading this from the repo).
+2. In the Render dashboard: **New → Blueprint**, connect this repo, and pick the branch to deploy.
+3. Render reads `render.yaml` automatically — it builds the frontend, installs the backend, and
+   starts `node backend/server.js`.
+4. When prompted for the `ANTHROPIC_API_KEY` environment variable, paste your key into Render's
+   dashboard (it's marked `sync: false` in the blueprint, so it's never stored in the repo).
+5. Render gives you a public `https://<your-service>.onrender.com` URL once the build finishes.
+
+> **Note:** the free Render plan uses an ephemeral filesystem, so `backend/data/tasks.json`
+> resets on each redeploy/restart — fine for a live demo, but for persistent task storage in
+> production, swap the JSON file store in `backend/lib/tasks.js` for a real database.
+
 The Express server already serves `frontend/dist` and proxies API routes, so a single
 `node backend/server.js` process (with `ANTHROPIC_API_KEY` set) is enough to run the whole app.
