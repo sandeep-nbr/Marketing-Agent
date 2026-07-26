@@ -6,8 +6,8 @@ export default function Header({ online }) {
       <div className="brand">
         <div className="brand-orb" />
         <div className="brand-text">
-          <h1>Aria</h1>
-          <span>Marketing AI Agent</span>
+          <h1>NBR Marketing Agent</h1>
+          <span>AI Marketing Assistant</span>
         </div>
       </div>
       <div className="header-status">

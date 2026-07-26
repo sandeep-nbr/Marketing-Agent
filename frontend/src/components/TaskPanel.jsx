@@ -24,12 +24,12 @@ export default function TaskPanel({ refreshKey }) {
   }
 
   return (
-    <aside className="task-sidebar">
-      <div className="task-sidebar-header">Tasks &amp; Reminders</div>
-      <div className="task-list">
+    <div className="sidebar-section">
+      <div className="sidebar-section-header">Tasks &amp; Reminders</div>
+      <div className="sidebar-section-list">
         {tasks.length === 0 && (
-          <div className="task-empty">
-            No open tasks yet. Ask Aria to add one, or say “remind me to…”
+          <div className="sidebar-empty">
+            No open tasks yet. Ask your NBR Marketing Agent to add one, or say "remind me to…"
           </div>
         )}
         {tasks.map((t) => (
@@ -45,6 +45,6 @@ export default function TaskPanel({ refreshKey }) {
           </div>
         ))}
       </div>
-    </aside>
+    </div>
   );
 }
