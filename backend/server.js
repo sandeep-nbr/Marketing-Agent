@@ -10,7 +10,10 @@ const app = express();
 const PORT = process.env.PORT || 8787;
 
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+// 25mb headroom: attachments are base64-encoded (~1.33x their raw size),
+// up to 5 files per message (see frontend/src/lib/attachments.js limits),
+// plus the running conversation history resent on every turn.
+app.use(express.json({ limit: "25mb" }));
 
 if (!process.env.ANTHROPIC_API_KEY) {
   console.warn(

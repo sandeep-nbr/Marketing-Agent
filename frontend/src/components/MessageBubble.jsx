@@ -23,14 +23,42 @@ export function ToolChip({ name }) {
   );
 }
 
+function AttachmentPart({ part }) {
+  if (part.kind === "image") {
+    return <img className="bubble-attachment-img" src={part.dataUrl} alt={part.name} />;
+  }
+  const icon = part.kind === "pdf" ? "📄" : part.kind === "textfile" ? "📝" : "📎";
+  return (
+    <div className="bubble-file-chip">
+      <span>{icon}</span>
+      <span className="bubble-file-name">{part.name}</span>
+      {part.size != null && <span className="bubble-file-size">{(part.size / 1024).toFixed(0)} KB</span>}
+    </div>
+  );
+}
+
+function BubbleContent({ content }) {
+  if (typeof content === "string") {
+    return content ? <ReactMarkdown>{content}</ReactMarkdown> : null;
+  }
+  return content.map((part, i) =>
+    part.kind === "text" ? (
+      part.text ? <ReactMarkdown key={i}>{part.text}</ReactMarkdown> : null
+    ) : (
+      <AttachmentPart key={i} part={part} />
+    )
+  );
+}
+
 export default function MessageBubble({ role, content, streaming }) {
   const isUser = role === "user";
+  const isEmpty = typeof content === "string" ? !content : !content?.length;
   return (
     <div className={`message-row ${isUser ? "user" : "assistant"}`}>
       <div className={`avatar ${isUser ? "user" : "assistant"}`}>{isUser ? "You" : "N"}</div>
       <div className="bubble">
-        {content ? (
-          <ReactMarkdown>{content}</ReactMarkdown>
+        {!isEmpty ? (
+          <BubbleContent content={content} />
         ) : streaming ? (
           <span className="typing-dots">
             <span />

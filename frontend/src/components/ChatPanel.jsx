@@ -3,6 +3,12 @@ import MessageBubble, { ToolChip } from "./MessageBubble.jsx";
 import QuickActions from "./QuickActions.jsx";
 import { streamChat } from "../lib/api.js";
 import {
+  fileToAttachment,
+  toApiMessages,
+  MAX_FILE_SIZE_MB,
+  MAX_FILES_PER_MESSAGE,
+} from "../lib/attachments.js";
+import {
   createRecognizer,
   speak,
   stopSpeaking,
@@ -14,8 +20,10 @@ const TASK_TOOLS = new Set(["add_task", "complete_task", "delete_task"]);
 const AUTOMATION_TOOLS = new Set(["add_automation", "trigger_automation", "delete_automation"]);
 
 export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
-  const [messages, setMessages] = useState([]); // {role, content}
+  const [messages, setMessages] = useState([]); // {role, content: string | array}
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState([]);
+  const [fileError, setFileError] = useState("");
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState(null);
@@ -26,11 +34,12 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
   const recognizerRef = useRef(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText, activeTool]);
+  }, [messages, streamingText, activeTool, attachments]);
 
   useEffect(() => {
     if (!speechRecognitionSupported) return;
@@ -62,14 +71,50 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
     }
   }
 
+  async function handleFilesSelected(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!files.length) return;
+    setFileError("");
+
+    if (attachments.length + files.length > MAX_FILES_PER_MESSAGE) {
+      setFileError(`You can attach up to ${MAX_FILES_PER_MESSAGE} files per message.`);
+      return;
+    }
+    const tooBig = files.find((f) => f.size > MAX_FILE_SIZE_MB * 1024 * 1024);
+    if (tooBig) {
+      setFileError(`"${tooBig.name}" is over the ${MAX_FILE_SIZE_MB}MB limit.`);
+      return;
+    }
+
+    try {
+      const newAttachments = await Promise.all(files.map(fileToAttachment));
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    } catch (err) {
+      setFileError(err.message || "Failed to read file(s).");
+    }
+  }
+
+  function removeAttachment(index) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function send(text) {
     const content = (text ?? input).trim();
-    if (!content || isStreaming) return;
+    if ((!content && attachments.length === 0) || isStreaming) return;
+
+    const localContent =
+      attachments.length === 0
+        ? content
+        : [{ kind: "text", text: content || "Here are the attached file(s)." }, ...attachments];
+
     setInput("");
+    setAttachments([]);
+    setFileError("");
     stopSpeaking();
     setSpeaking(false);
 
-    const nextMessages = [...messages, { role: "user", content }];
+    const nextMessages = [...messages, { role: "user", content: localContent }];
     setMessages(nextMessages);
     setIsStreaming(true);
     setStreamingText("");
@@ -89,7 +134,7 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
       abortControllerRef.current = null;
     };
 
-    await streamChat(nextMessages, {
+    await streamChat(toApiMessages(nextMessages), {
       signal: controller.signal,
       onText: (delta) => {
         accumulated += delta;
@@ -142,6 +187,8 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
     el.style.height = Math.min(el.scrollHeight, 140) + "px";
   }
 
+  const canSend = (input.trim() || attachments.length > 0) && !isStreaming;
+
   return (
     <div className="chat-column">
       <QuickActions onPick={(prompt) => send(prompt)} />
@@ -153,8 +200,8 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
             <h2>I'm your NBR Marketing Agent</h2>
             <p>
               Ask me to draft campaign copy, generate visuals, plan content, research competitors,
-              trigger your automations, or manage your marketing to-dos. Type a command or tap the
-              mic and just talk to me.
+              trigger your automations, or manage your marketing to-dos. Attach a file, type a
+              command, or tap the mic and just talk to me.
             </p>
           </div>
         )}
@@ -173,7 +220,44 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
         <div ref={messagesEndRef} />
       </div>
 
+      {(attachments.length > 0 || fileError) && (
+        <div className="attachment-tray">
+          {attachments.map((att, i) => (
+            <div className="attachment-chip" key={i}>
+              {att.kind === "image" ? (
+                <img className="attachment-chip-thumb" src={att.dataUrl} alt={att.name} />
+              ) : (
+                <span className="attachment-chip-icon">
+                  {att.kind === "pdf" ? "📄" : att.kind === "textfile" ? "📝" : "📎"}
+                </span>
+              )}
+              <span className="attachment-chip-name">{att.name}</span>
+              <button type="button" className="attachment-chip-remove" onClick={() => removeAttachment(i)}>
+                ×
+              </button>
+            </div>
+          ))}
+          {fileError && <div className="attachment-error">{fileError}</div>}
+        </div>
+      )}
+
       <div className="composer">
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          hidden
+          onChange={handleFilesSelected}
+        />
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={() => fileInputRef.current?.click()}
+          title="Attach files"
+        >
+          📎
+        </button>
+
         <button
           type="button"
           className={`icon-btn ${listening ? "mic-on listening" : ""}`}
@@ -223,13 +307,7 @@ export default function ChatPanel({ onTaskMutation, onAutomationMutation }) {
             ■
           </button>
         ) : (
-          <button
-            type="button"
-            className="icon-btn send-btn"
-            onClick={() => send()}
-            disabled={!input.trim()}
-            title="Send"
-          >
+          <button type="button" className="icon-btn send-btn" onClick={() => send()} disabled={!canSend} title="Send">
             ➤
           </button>
         )}

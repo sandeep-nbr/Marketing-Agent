@@ -18,6 +18,7 @@ Built with:
 - ⚡ **Automation triggers** — register your Zapier or Make.com webhook URLs and have the agent trigger them conversationally ("post this to Buffer", "sync this lead to the CRM").
 - ✅ **Task & reminder tracking** — ask the agent to add/complete/remove tasks, or manage them directly in the sidebar.
 - ⏹️ **Stop control** — cancel a response mid-stream; whatever was generated so far is kept.
+- 📎 **File attachments** — attach images, PDFs, or text/code files (📎 in the composer, up to 5 files / 8MB each). Images and PDFs are read natively by Claude; text-like files are read as text. Other binary formats (e.g. `.docx`, `.xlsx`) are acknowledged but not parsed — export to PDF/CSV/text if you need those read.
 
 ## Setup
 
